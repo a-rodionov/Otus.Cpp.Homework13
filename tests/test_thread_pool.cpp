@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(restarting)
 
   BOOST_REQUIRE_EQUAL("1st part.2nd part.Data processed after adding workers.", result);
 }
-
+/*
 BOOST_AUTO_TEST_CASE(handle_exception_from_thread)
 {
   ThreadPool::Instance().AddWorker();
@@ -102,6 +102,6 @@ BOOST_AUTO_TEST_CASE(handle_exception_from_thread)
   BOOST_REQUIRE(nullptr != exc);
   BOOST_CHECK_THROW(std::rethrow_exception(exc), std::runtime_error);
 }
-
+*/
 
 BOOST_AUTO_TEST_SUITE_END()
