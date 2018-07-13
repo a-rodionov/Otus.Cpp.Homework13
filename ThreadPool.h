@@ -13,9 +13,9 @@
 
 class ThreadPool {
 
-  ThreadPool() = default;
-
 public:
+
+  ThreadPool() = default;
 
   ~ThreadPool() {
     JoinWorkers();
@@ -25,12 +25,6 @@ public:
   ThreadPool& operator=(const ThreadPool&) = delete;
   ThreadPool(ThreadPool&&) = delete;
   ThreadPool& operator=(ThreadPool&&) = delete;
-
-  static ThreadPool& Instance()
-  {
-    static ThreadPool threadPool;
-    return threadPool;
-  }
 
   auto AddWorker() {
     // Одновременно разрешается исполнение лишь одного метода AddWorker 

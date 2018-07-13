@@ -23,10 +23,13 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
   class client_session : public std::enable_shared_from_this<client_session>, public coroutine, boost::noncopyable
   {
 
-    client_session(boost::asio::io_service& io_service, session_set& sessions)
+    client_session(boost::asio::io_service& io_service,
+                   session_set& sessions,
+                   ThreadPool& threadPool)
     : io_service{io_service},
     socket(io_service),
-    sessions(sessions) {};
+    sessions(sessions),
+    threadPool{threadPool} {};
 
   public:
 
@@ -34,8 +37,10 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
       stop();
     }
 
-    static auto make(boost::asio::io_service& io_service, session_set& sessions) {
-      return std::shared_ptr<client_session>(new client_session(io_service, sessions));
+    static auto make(boost::asio::io_service& io_service,
+                     session_set& sessions,
+                     ThreadPool& threadPool) {
+      return std::shared_ptr<client_session>(new client_session(io_service, sessions, threadPool));
     }
 
     tcp::socket& sock() {
@@ -101,7 +106,7 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
     }
 
     void on_client_cmd() {
-      ThreadPool::Instance().AddTask(
+      threadPool.AddTask(
         [self = shared_from_this()] () {
           try {
             std::istream istream(&self->read_buffer);
@@ -131,12 +136,18 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
     boost::asio::streambuf read_buffer;
     boost::asio::streambuf write_buffer;
     session_set sessions;
+    ThreadPool& threadPool;
   };
 
   explicit join_server(unsigned short port_num)
     : io_service(),
       acceptor(io_service, tcp::endpoint{tcp::v4(), port_num}),
-      sessions(std::make_shared<std::set<std::shared_ptr<client_session>>>()) {}
+      sessions(std::make_shared<std::set<std::shared_ptr<client_session>>>())
+  {
+    for(size_t i{0}; i < std::thread::hardware_concurrency(); ++i) {
+      threadPool.AddWorker();
+    }
+  }
 
 public:
 
@@ -152,7 +163,7 @@ public:
     if(isStarted)
       return;
     isStarted = true;
-    auto session = client_session::make(io_service, sessions);
+    auto session = client_session::make(io_service, sessions, threadPool);
     do_accept(session);
     io_service.run();
   }
@@ -178,7 +189,7 @@ private:
           self->sessions->insert(session);
           session->start();
         }
-        auto new_session = client_session::make(self->io_service, self->sessions);
+        auto new_session = client_session::make(self->io_service, self->sessions, self->threadPool);
         self->do_accept(new_session);
       });
   }
@@ -190,4 +201,5 @@ private:
                             // здесь не требуется блокировок. При этом он использует
                             // асинхронные операции ввода/вывода в сеть, что позволяет
                             // ему обрабатывать одновременно несколько соединений.
+  ThreadPool threadPool;
 };

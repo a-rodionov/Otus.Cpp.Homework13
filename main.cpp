@@ -37,9 +37,6 @@ int main(int argc, char const* argv[])
     }
 
     Logger::Instance();
-    for(auto i{0}; i < std::thread::hardware_concurrency(); ++i) {
-      ThreadPool::Instance().AddWorker();
-    }
 
     auto server = join_server::make(static_cast<unsigned short>(port_num));
     server->start();
