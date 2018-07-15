@@ -3,6 +3,7 @@
 #include "JoinServer.h"
 #include "Logger.h"
 #include <boost/asio.hpp>
+#include <algorithm>
 
 using boost::asio::ip::tcp;
 
@@ -38,7 +39,8 @@ int main(int argc, char const* argv[])
 
     Logger::Instance();
 
-    auto server = join_server::make(static_cast<unsigned short>(port_num));
+    auto backgroundThreadsCount = std::max(static_cast<unsigned int>(2), std::thread::hardware_concurrency());
+    auto server = join_server::make(static_cast<unsigned short>(port_num), backgroundThreadsCount);
     server->start();
   }
   catch (const std::exception& e)

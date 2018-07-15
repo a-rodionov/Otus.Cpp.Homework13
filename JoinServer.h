@@ -139,12 +139,14 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
     ThreadPool& threadPool;
   };
 
-  explicit join_server(unsigned short port_num)
+  explicit join_server(unsigned short port_num, size_t backgroundThreadsCount)
     : io_service(),
       acceptor(io_service, tcp::endpoint{tcp::v4(), port_num}),
       sessions(std::make_shared<std::set<std::shared_ptr<client_session>>>())
   {
-    for(size_t i{0}; i < std::thread::hardware_concurrency(); ++i) {
+    if(0 == backgroundThreadsCount)
+      throw std::invalid_argument("Number of background processing threads must be >= 1.");
+    for(decltype(backgroundThreadsCount) i{0}; i < backgroundThreadsCount; ++i) {
       threadPool.AddWorker();
     }
   }
@@ -155,8 +157,8 @@ public:
     stop();
   }
 
-  static auto make(unsigned short port_num) {
-    return std::shared_ptr<join_server>(new join_server(port_num));
+  static auto make(unsigned short port_num, size_t backgroundThreadsCount) {
+    return std::shared_ptr<join_server>(new join_server(port_num, backgroundThreadsCount));
   }
 
   void start() {
