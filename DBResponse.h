@@ -19,7 +19,7 @@ class DBResponseNoCache : public DBResponse, public std::enable_shared_from_this
   DBResponseNoCache(std::shared_ptr<boost::asio::ip::tcp::socket>& socket)
     : socket{socket} {}
 
-  void send(const std::string& response) {
+  void send(std::string&& response) {
     auto itr = sendingData.insert(sendingData.cend(), std::move(response));
     async_write( *socket,
                  boost::asio::buffer(*itr),
@@ -37,14 +37,12 @@ public:
   }
 
   void push_back(const std::string& response) override {
-    std::string tmp{response};
-    tmp += '\n';
-    send(tmp);
+    send(response + '\n');
   }
 
   void push_back(std::string&& response) override {
     response += '\n';
-    send(response);
+    send(std::move(response));
   }
 
 private:
