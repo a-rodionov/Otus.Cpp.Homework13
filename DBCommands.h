@@ -60,29 +60,25 @@ static void ExecuteTruncate(const std::vector<std::string>& cmd) {
   DataBase::Instance().TruncateTable(cmd[1]);
 }
 
-static void ExecuteIntersection(const std::vector<std::string>& cmd, std::ostream& out) {
+static void ExecuteIntersection(const std::vector<std::string>& cmd, std::shared_ptr<DBResponse>& dbResponse) {
   if(1 != cmd.size()) {
     throw DataBaseException(ERR_PARAMS_COUNT);
   }
   auto table_a = DataBase::Instance().GetTable("A");
   auto table_b = DataBase::Instance().GetTable("B");
-  auto result = table_a->Intersection(*table_b);
-  std::copy(std::cbegin(*result), std::cend(*result),
-            std::ostream_iterator<set_operation_result>(out, "\n"));
+  table_a->Intersection(*table_b, dbResponse);
 }
 
-static void ExecuteSymmetricDifference(const std::vector<std::string>& cmd, std::ostream& out) {
+static void ExecuteSymmetricDifference(const std::vector<std::string>& cmd, std::shared_ptr<DBResponse>& dbResponse) {
   if(1 != cmd.size()) {
     throw DataBaseException(ERR_PARAMS_COUNT);
   }
   auto table_a = DataBase::Instance().GetTable("A");
   auto table_b = DataBase::Instance().GetTable("B");
-  auto result = table_a->SymmetricDifference(*table_b);
-  std::copy(std::cbegin(*result), std::cend(*result),
-            std::ostream_iterator<set_operation_result>(out, "\n"));
+  table_a->SymmetricDifference(*table_b, dbResponse);
 }
 
-static void ExecutePausedInSymmetricDifference(const std::vector<std::string>& cmd, std::ostream& out) {
+static void ExecutePausedInSymmetricDifference(const std::vector<std::string>& cmd, std::shared_ptr<DBResponse>& dbResponse) {
   if(2 != cmd.size()) {
     throw DataBaseException(ERR_PARAMS_COUNT);
   }
@@ -102,12 +98,10 @@ static void ExecutePausedInSymmetricDifference(const std::vector<std::string>& c
 
   auto table_a = DataBase::Instance().GetTable("A");
   auto table_b = DataBase::Instance().GetTable("B");
-  auto result = table_a->PauseInSymmetricDifference(*table_b, seconds);
-  std::copy(std::cbegin(*result), std::cend(*result),
-            std::ostream_iterator<set_operation_result>(out, "\n"));
+  table_a->PauseInSymmetricDifference(*table_b, seconds, dbResponse);
 }
 
-void ExecuteDBCommad(const std::string& str_command, std::ostream& out) {
+void ExecuteDBCommad(const std::string& str_command, std::shared_ptr<DBResponse>& dbResponse) {
   auto cmd = split(str_command);
   if(cmd.empty()) {
     throw DataBaseException(ERR_EMPTY_CMD);
@@ -120,13 +114,13 @@ void ExecuteDBCommad(const std::string& str_command, std::ostream& out) {
     ExecuteTruncate(cmd);
   }
   else if(CMD_INTERSECTION == cmd[0]) {
-    ExecuteIntersection(cmd, out);
+    ExecuteIntersection(cmd, dbResponse);
   }
   else if(CMD_SYMMETRIC_DIFFERENCE == cmd[0]) {
-    ExecuteSymmetricDifference(cmd, out);
+    ExecuteSymmetricDifference(cmd, dbResponse);
   }
   else if(CMD_PAUSED_IN_SYMMETRIC_DIFFERENCE == cmd[0]) {
-    ExecutePausedInSymmetricDifference(cmd, out);
+    ExecutePausedInSymmetricDifference(cmd, dbResponse);
   }
   else
     throw DataBaseException(ERR_UNSUPPORTED_CMD);

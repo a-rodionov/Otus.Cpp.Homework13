@@ -6,6 +6,7 @@
 #include <atomic>
 #include <mutex>
 #include <shared_mutex>
+#include "DBResponse.h"
 
 const std::string ERR_TABLE_NOT_FOUND{"Table wasn't found."};
 const std::string ERR_DUPLICATE{"duplicate"};
@@ -16,11 +17,15 @@ public:
   DataBaseException(const std::string& errMsg)
     : std::runtime_error(errMsg) {}
 };
-
+/*
 struct set_operation_result {
 
   set_operation_result(size_t idx, const std::string& value_1, const std::string& value_2)
     : idx{idx}, value_1{value_1}, value_2{value_2} {}
+
+  operator std::string() {
+    return std::string(std::to_string(idx) + ',' + value_1 + ',' + value_2);
+  }
 
   size_t idx;
   std::string value_1;
@@ -30,6 +35,10 @@ struct set_operation_result {
 std::ostream& operator<<(std::ostream& out, const set_operation_result& data) {
   out << data.idx << ',' << data.value_1 << ',' << data.value_2;
   return out;
+}
+*/
+std::string DBResponseToString(size_t idx, const std::string& value_1, const std::string& value_2) {
+  return std::string(std::to_string(idx) + ',' + value_1 + ',' + value_2);
 }
 
 using row = std::pair<size_t, std::string>;
@@ -109,9 +118,7 @@ public:
   // по коллекциям таблиц из-за невозможности конструирования объекта
   // результата set_operation_result, содержащего конечный результат только
   // лишь из одного итератора на std::map<size_t, std::string>.
-  auto Intersection(DataTable& other) {
-    
-    auto result = std::make_unique<std::list<set_operation_result>>();
+  void Intersection(DataTable& other, std::shared_ptr<DBResponse>& dbResponse) {
 
     // Оформлено в виде блока, чтобы не писать unlock
     {
@@ -128,7 +135,7 @@ public:
           ++first1;
         } else  {
           if (!(first2->first < first1->first)) {
-            result->emplace_back(first1->first, first1->second, first2->second);
+            dbResponse->push_back(DBResponseToString(first1->first, first1->second, first2->second));
             ++first1;
           }
           ++first2;
@@ -141,17 +148,13 @@ public:
     // провалиться, но удасться у последнего "читающего".
     TryMoveDefferedData();
     other.TryMoveDefferedData();
-
-    return result;
   }
 
   // Не был использован алгоритм из stl, чтобы избежать двойных проходов
   // по коллекциям таблиц из-за невозможности конструирования объекта
   // результата set_operation_result, содержащего конечный результат только
   // лишь из одного итератора на std::map<size_t, std::string>.
-  auto SymmetricDifference(DataTable& other) {
-
-    auto result = std::make_unique<std::list<set_operation_result>>();
+  void SymmetricDifference(DataTable& other, std::shared_ptr<DBResponse>& dbResponse) {
 
     // Оформлено в виде блока, чтобы не писать unlock
     {
@@ -165,30 +168,30 @@ public:
       auto last2 = std::cend(other.data);
       while (first1 != last1) {
         if (first2 == last2) {
-          std::transform(first1, last1, std::back_inserter(*result),
-                        [](const auto& row) {
-                          return set_operation_result(row.first, row.second, "");
-                        });
+          while (first1 != last1) {
+            dbResponse->push_back(DBResponseToString(first1->first, first1->second, ""));
+            ++first1;
+          }
           break;
         }
 
         if (first1->first < first2->first) {
-          result->emplace_back(first1->first, first1->second, "");
+          dbResponse->push_back(DBResponseToString(first1->first, first1->second, ""));
           ++first1;
         }
         else {
           if (first2->first < first1->first) {
-            result->emplace_back(first2->first, "", first2->second);
+            dbResponse->push_back(DBResponseToString(first2->first, "", first2->second));
           } else {
             ++first1;
           }
           ++first2;
         }
       }
-      std::transform(first2, last2, std::back_inserter(*result),
-                    [](const auto& row) {
-                      return set_operation_result(row.first, "", row.second);
-                    });
+      while (first2 != last2) {
+        dbResponse->push_back(DBResponseToString(first2->first, "", first2->second));
+        ++first2;
+      }
     }
 
     // Если блокировка на чтение стала помехой добавления данных, то можно попытаться это сделать
@@ -196,14 +199,10 @@ public:
     // провалиться, но удасться у последнего "читающего".
     TryMoveDefferedData();
     other.TryMoveDefferedData();
-
-    return result;
   }
 
   // Для тестирования работоспособности блокировок
-  auto PauseInSymmetricDifference(DataTable& other, size_t seconds) {
-
-    auto result = std::make_unique<std::list<set_operation_result>>();
+  void PauseInSymmetricDifference(DataTable& other, size_t seconds, std::shared_ptr<DBResponse>& dbResponse) {
 
     // Оформлено в виде блока, чтобы не писать unlock
     {
@@ -219,30 +218,30 @@ public:
       auto last2 = std::cend(other.data);
       while (first1 != last1) {
         if (first2 == last2) {
-          std::transform(first1, last1, std::back_inserter(*result),
-                        [](const auto& row) {
-                          return set_operation_result(row.first, row.second, "");
-                        });
+          while (first1 != last1) {
+            dbResponse->push_back(DBResponseToString(first1->first, first1->second, ""));
+            ++first1;
+          }
           break;
         }
 
         if (first1->first < first2->first) {
-          result->emplace_back(first1->first, first1->second, "");
+          dbResponse->push_back(DBResponseToString(first1->first, first1->second, ""));
           ++first1;
         }
         else {
           if (first2->first < first1->first) {
-            result->emplace_back(first2->first, "", first2->second);
+            dbResponse->push_back(DBResponseToString(first2->first, "", first2->second));
           } else {
             ++first1;
           }
           ++first2;
         }
       }
-      std::transform(first2, last2, std::back_inserter(*result),
-                    [](const auto& row) {
-                      return set_operation_result(row.first, "", row.second);
-                    });
+      while (first2 != last2) {
+        dbResponse->push_back(DBResponseToString(first2->first, "", first2->second));
+        ++first2;
+      }
     }
 
     // Если блокировка на чтение стала помехой добавления данных, то можно попытаться это сделать
@@ -250,8 +249,6 @@ public:
     // провалиться, но удасться у последнего "читающего".
     TryMoveDefferedData();
     other.TryMoveDefferedData();
-
-    return result;
   }
 
 private:

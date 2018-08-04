@@ -6,6 +6,7 @@
 #include <boost/system/system_error.hpp>
 #include "ThreadPool.h"
 #include "DBCommands.h"
+//#include "DBResponse.h"
 #include "coroutine.hpp"
 #include "yield.hpp"
 
@@ -27,7 +28,7 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
                    session_set& sessions,
                    ThreadPool& threadPool)
     : io_service{io_service},
-    socket(io_service),
+    socket(std::make_shared<tcp::socket>(io_service)),
     sessions(sessions),
     threadPool{threadPool} {};
 
@@ -44,7 +45,7 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
     }
 
     tcp::socket& sock() {
-      return socket;
+      return *socket;
     }
 
     void start() {
@@ -58,7 +59,7 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
       if (!isStarted)
         return;
       isStarted = false;
-      socket.close();
+      socket->close();
       auto itr = std::find(std::cbegin(*sessions), std::cend(*sessions), shared_from_this());
       sessions->erase(itr);
     }
@@ -68,7 +69,7 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
     void step(const boost::system::error_code& ec = boost::system::error_code(), size_t bytes = 0) {
       reenter(this) {
         for (;;) {
-          yield async_read_until( socket,
+          yield async_read_until( *socket,
                                   read_buffer,
                                   '\n',
                                   [self = shared_from_this()] (boost::system::error_code ec, size_t) {
@@ -83,14 +84,14 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
 
           yield {
             if(ec) {
-              async_write( socket,
+              async_write( *socket,
                            write_buffer,
                            [self = shared_from_this()] (boost::system::error_code, size_t) {
                               self->stop();
                            });
             }
             else {
-              async_write( socket,
+              async_write( *socket,
                            write_buffer,
                            [self = shared_from_this()] (boost::system::error_code ec, size_t) {
                               if (ec) {
@@ -112,8 +113,9 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
             std::istream istream(&self->read_buffer);
             std::string cmd;
             std::getline(istream, cmd);
+            self->dbResponse = DBResponseNoCache::make(self->socket);
+            ExecuteDBCommad(cmd, self->dbResponse);
             std::ostream ostream(&self->write_buffer);
-            ExecuteDBCommad(cmd, ostream);
             ostream << SERVER_RESPONSE_OK << std::endl;
             self->step();
           }
@@ -132,11 +134,12 @@ class join_server : public std::enable_shared_from_this<join_server>, boost::non
 
     bool isStarted{false};
     boost::asio::io_service& io_service;
-    tcp::socket socket;
+    std::shared_ptr<tcp::socket> socket;
     boost::asio::streambuf read_buffer;
     boost::asio::streambuf write_buffer;
     session_set sessions;
     ThreadPool& threadPool;
+    std::shared_ptr<DBResponse> dbResponse;
   };
 
   explicit join_server(unsigned short port_num, size_t backgroundThreadsCount)

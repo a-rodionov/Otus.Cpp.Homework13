@@ -40,13 +40,18 @@ void Transmit(ip::tcp::socket& socket,
               boost::asio::streambuf& streambuf,
               const std::string& client_request,
               std::vector<std::string>& server_response) {
-  socket.write_some(buffer(client_request));
-  boost::asio::read_until(socket, streambuf, '\n');
-  std::istream istream(&streambuf);
   server_response.clear();
+  socket.write_some(buffer(client_request));
   std::string line;
-  while(std::getline(istream, line)) {
-    server_response.push_back(line);
+  while(true) {
+    boost::asio::read_until(socket, streambuf, '\n');
+    std::istream istream(&streambuf);
+    while(std::getline(istream, line)) {
+      server_response.push_back(line);
+    }
+    if(SERVER_RESPONSE_OK == server_response.back()
+      || 0 == server_response.back().find(SERVER_RESPONSE_ERROR))
+      break;
   }
 }
 
@@ -255,16 +260,20 @@ void ParallelDBRead(std::atomic_bool& isDataSent,
     socket.write_some(buffer(client_request));
     isDataSent = true;
 
-    boost::asio::streambuf streambuf;
-    boost::asio::read_until(socket, streambuf, '\n');
-    isDataRead = true;
-
-    std::istream istream(&streambuf);
     server_response.clear();
     std::string line;
-    while(std::getline(istream, line)) {
-      server_response.push_back(line);
+    while(true) {
+      boost::asio::streambuf streambuf;
+      boost::asio::read_until(socket, streambuf, '\n');
+      std::istream istream(&streambuf);
+      while(std::getline(istream, line)) {
+        server_response.push_back(line);
+      }
+      if(SERVER_RESPONSE_OK == server_response.back()
+        || 0 == server_response.back().find(SERVER_RESPONSE_ERROR))
+        break;
     }
+    isDataRead = true;
   }
   catch(...) {
     isFailed = true;
